@@ -20,6 +20,33 @@ const SCREEN_HEIGHT = grid.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
 const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
 
+function levelComplete() {
+  let hasPelletsLeft = false;
+
+  grid.forEach((row) => {
+    row.forEach((cell) => {
+      if (cell === 2) {
+        hasPelletsLeft = true;
+      }
+    });
+  });
+
+  return !hasPelletsLeft;
+}
+
+function restartLevel(setX, setY) {
+  setX(0);
+  setY(0);
+
+  grid.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (cell === 0) {
+        grid[rowIndex][columnIndex] = 2;
+      }
+    });
+  });
+}
+
 function drawCircle(x, y, context, radiusDivisor) {
   const radius = SQUARE_SIZE / radiusDivisor;
   const pixelX = (x + 1 / 2) * SQUARE_SIZE;
@@ -62,9 +89,15 @@ function drawGrid(context) {
   });
 }
 
-function processAnyPellets(x, y) {
+function processAnyPellets(x, y, setX, setY, score, setScore, level, setLevel) {
   if (grid[y][x] === 2) {
     grid[y][x] = 0;
+    setScore(score + 1);
+
+    if (levelComplete()) {
+      setLevel(level + 1);
+      restartLevel(setX, setY);
+    }
   }
 }
 
@@ -140,24 +173,36 @@ function useKeyboardShortcuts(x, y, setX, setY, canvasRef) {
   });
 }
 
-function useMover(x, y, canvasRef) {
+function useMover(
+  x,
+  y,
+  setX,
+  setY,
+  canvasRef,
+  score,
+  setScore,
+  level,
+  setLevel,
+) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
 
     drawGrid(context);
     drawPacman(x, y, context);
-    processAnyPellets(x, y);
-  }, [x, y, canvasRef]);
+    processAnyPellets(x, y, setX, setY, score, setScore, level, setLevel);
+  }, [x, y, setX, setY, canvasRef, score, setScore, level, setLevel]);
 }
 
 function Pacman() {
+  const [level, setLevel] = useState(1);
+  const [score, setScore] = useState(0);
   const [x, setX] = useState(INITIAL_X);
   const [y, setY] = useState(INITIAL_Y);
   const canvasRef = useRef(null);
 
   useKeyboardShortcuts(x, y, setX, setY, canvasRef);
-  useMover(x, y, canvasRef);
+  useMover(x, y, setX, setY, canvasRef, score, setScore, level, setLevel);
 
   return (
     <>
@@ -167,6 +212,8 @@ function Pacman() {
         width={SCREEN_PIXEL_WIDTH}
         height={SCREEN_PIXEL_HEIGHT}
       ></canvas>
+      <br />
+      Score: {score} &nbsp; &nbsp; &nbsp; Level: {level}
     </>
   );
 }
