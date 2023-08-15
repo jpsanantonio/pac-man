@@ -1,10 +1,19 @@
 import { useEffect, useState, useRef } from "react";
 
+const grid = [
+  [0, 0, 0, 0, 0, 0, 0, 1],
+  [0, 1, 0, 1, 0, 0, 0, 1],
+  [0, 0, 1, 0, 0, 0, 0, 1],
+  [0, 0, 0, 0, 0, 0, 0, 1],
+  [0, 0, 0, 0, 0, 0, 0, 1],
+  [1, 0, 0, 0, 0, 0, 0, 1],
+];
+
 const SQUARE_SIZE = 40;
 const INITIAL_X = 1;
 const INITIAL_Y = 2;
-const SCREEN_WIDTH = 20;
-const SCREEN_HEIGHT = 15;
+const SCREEN_WIDTH = grid[0].length;
+const SCREEN_HEIGHT = grid.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
 const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
 
@@ -20,6 +29,23 @@ function drawCircle(x, y, context) {
   context.fill();
 }
 
+function drawWalls(context) {
+  context.fillStyle = "#000000";
+
+  grid.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (cell === 1) {
+        context.fillRect(
+          columnIndex * SQUARE_SIZE,
+          rowIndex * SQUARE_SIZE,
+          SQUARE_SIZE,
+          SQUARE_SIZE,
+        );
+      }
+    });
+  });
+}
+
 function clearScreen(context) {
   context.clearRect(0, 0, SCREEN_PIXEL_WIDTH, SCREEN_PIXEL_HEIGHT);
 }
@@ -31,13 +57,17 @@ function collidedWithBorder(x, y) {
   return isOutOfBounds;
 }
 
-function useKeyboardShortcuts(x, y, setX, setY) {
+function collidedWithWall(x, y) {
+  return grid[y][x] === 1;
+}
+
+function useKeyboardShortcuts(x, y, setX, setY, canvasRef) {
   const handleKeydown = ({ code }) => {
     switch (code) {
       case "ArrowUp":
         setY((prev) => {
           const current = prev - 1;
-          if (collidedWithBorder(x, current)) {
+          if (collidedWithBorder(x, current) || collidedWithWall(x, current)) {
             return prev;
           }
           return current;
@@ -46,7 +76,7 @@ function useKeyboardShortcuts(x, y, setX, setY) {
       case "ArrowDown":
         setY((prev) => {
           const current = prev + 1;
-          if (collidedWithBorder(x, current)) {
+          if (collidedWithBorder(x, current) || collidedWithWall(x, current)) {
             return prev;
           }
           return current;
@@ -55,7 +85,7 @@ function useKeyboardShortcuts(x, y, setX, setY) {
       case "ArrowLeft":
         setX((prev) => {
           const current = prev - 1;
-          if (collidedWithBorder(current, y)) {
+          if (collidedWithBorder(current, y) || collidedWithWall(current, y)) {
             return prev;
           }
           return current;
@@ -64,7 +94,7 @@ function useKeyboardShortcuts(x, y, setX, setY) {
       case "ArrowRight":
         setX((prev) => {
           const current = prev + 1;
-          if (collidedWithBorder(current, y)) {
+          if (collidedWithBorder(current, y) || collidedWithWall(current, y)) {
             return prev;
           }
           return current;
@@ -76,6 +106,10 @@ function useKeyboardShortcuts(x, y, setX, setY) {
   };
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d");
+
+    clearScreen(context);
     document.addEventListener("keydown", handleKeydown);
 
     return () => {
@@ -89,7 +123,7 @@ function useMover(x, y, canvasRef) {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
 
-    clearScreen(context);
+    drawWalls(context);
     drawCircle(x, y, context);
   }, [x, y, canvasRef]);
 }
@@ -99,7 +133,7 @@ function Pacman() {
   const [y, setY] = useState(INITIAL_Y);
   const canvasRef = useRef(null);
 
-  useKeyboardShortcuts(x, y, setX, setY);
+  useKeyboardShortcuts(x, y, setX, setY, canvasRef);
   useMover(x, y, canvasRef);
 
   return (
