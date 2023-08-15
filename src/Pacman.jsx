@@ -1,35 +1,38 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 
-function useCircleDrawer(canvasRef) {
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas.getContext("2d");
-    const x = 50;
-    const y = 100;
-    const radius = 20;
+const SQUARE_SIZE = 40;
 
-    context.fillStyle = "#000000";
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2, false);
-    context.closePath();
-    context.fill();
-  }, [canvasRef]);
+function drawCircle(x, y, context) {
+  const radius = SQUARE_SIZE / 2;
+
+  context.fillStyle = "#000000";
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2, false);
+  context.closePath();
+  context.fill();
 }
 
-function useKeyboardShortcut() {
+function clearScreen(context) {
+  const screenWidth = 800;
+  const screenHeight = 600;
+
+  context.clearRect(0, 0, screenWidth, screenHeight);
+}
+
+function useKeyboardShortcuts(setX, setY) {
   const handleKeydown = ({ code }) => {
     switch (code) {
       case "ArrowUp":
-        console.log("up");
+        setY((prev) => prev - SQUARE_SIZE);
         break;
       case "ArrowDown":
-        console.log("down");
+        setY((prev) => prev + SQUARE_SIZE);
         break;
       case "ArrowLeft":
-        console.log("left");
+        setX((prev) => prev - SQUARE_SIZE);
         break;
       case "ArrowRight":
-        console.log("right");
+        setX((prev) => prev + SQUARE_SIZE);
         break;
       default:
         return;
@@ -45,11 +48,23 @@ function useKeyboardShortcut() {
   });
 }
 
+function useMover(x, y, canvasRef) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d");
+
+    clearScreen(context);
+    drawCircle(x, y, context);
+  }, [x, y, canvasRef]);
+}
+
 function Pacman() {
+  const [x, setX] = useState(50);
+  const [y, setY] = useState(100);
   const canvasRef = useRef(null);
 
-  useKeyboardShortcut();
-  useCircleDrawer(canvasRef);
+  useKeyboardShortcuts(setX, setY);
+  useMover(x, y, canvasRef);
 
   return (
     <>
