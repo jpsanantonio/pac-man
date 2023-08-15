@@ -1,12 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 
+// 0 is a blank space
+// 1 is a wall
+// 2 is a pellet
 const grid = [
-  [0, 0, 0, 0, 0, 0, 0, 1],
-  [0, 1, 0, 1, 0, 0, 0, 1],
-  [0, 0, 1, 0, 0, 0, 0, 1],
-  [0, 0, 0, 0, 0, 0, 0, 1],
-  [0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
+  [2, 2, 2, 2, 2, 2, 2, 1],
+  [2, 1, 2, 1, 2, 2, 2, 1],
+  [2, 2, 1, 2, 2, 2, 2, 1],
+  [2, 2, 2, 2, 2, 2, 2, 1],
+  [2, 2, 2, 2, 2, 2, 2, 1],
+  [1, 2, 2, 2, 2, 2, 2, 1],
 ];
 
 const SQUARE_SIZE = 40;
@@ -17,8 +20,8 @@ const SCREEN_HEIGHT = grid.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
 const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
 
-function drawCircle(x, y, context) {
-  const radius = SQUARE_SIZE / 2;
+function drawCircle(x, y, context, radiusDivisor) {
+  const radius = SQUARE_SIZE / radiusDivisor;
   const pixelX = (x + 1 / 2) * SQUARE_SIZE;
   const pixelY = (y + 1 / 2) * SQUARE_SIZE;
 
@@ -29,21 +32,40 @@ function drawCircle(x, y, context) {
   context.fill();
 }
 
-function drawWalls(context) {
+function drawPacman(x, y, context) {
+  const radiusDivisor = 2;
+  drawCircle(x, y, context, radiusDivisor);
+}
+
+function drawPellet(x, y, context) {
+  const radiusDivisor = 6;
+  drawCircle(x, y, context, radiusDivisor);
+}
+
+function drawWall(x, y, context) {
+  context.fillRect(x * SQUARE_SIZE, y * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+}
+
+function drawGrid(context) {
   context.fillStyle = "#000000";
 
   grid.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       if (cell === 1) {
-        context.fillRect(
-          columnIndex * SQUARE_SIZE,
-          rowIndex * SQUARE_SIZE,
-          SQUARE_SIZE,
-          SQUARE_SIZE,
-        );
+        drawWall(columnIndex, rowIndex, context);
+      }
+
+      if (cell === 2) {
+        drawPellet(columnIndex, rowIndex, context);
       }
     });
   });
+}
+
+function processAnyPellets(x, y) {
+  if (grid[y][x] === 2) {
+    grid[y][x] = 0;
+  }
 }
 
 function clearScreen(context) {
@@ -123,8 +145,9 @@ function useMover(x, y, canvasRef) {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
 
-    drawWalls(context);
-    drawCircle(x, y, context);
+    drawGrid(context);
+    drawPacman(x, y, context);
+    processAnyPellets(x, y);
   }, [x, y, canvasRef]);
 }
 
