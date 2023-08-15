@@ -1,38 +1,74 @@
 import { useEffect, useState, useRef } from "react";
 
 const SQUARE_SIZE = 40;
+const INITIAL_X = 1;
+const INITIAL_Y = 2;
+const SCREEN_WIDTH = 20;
+const SCREEN_HEIGHT = 15;
+const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
+const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
 
 function drawCircle(x, y, context) {
   const radius = SQUARE_SIZE / 2;
+  const pixelX = (x + 1 / 2) * SQUARE_SIZE;
+  const pixelY = (y + 1 / 2) * SQUARE_SIZE;
 
   context.fillStyle = "#000000";
   context.beginPath();
-  context.arc(x, y, radius, 0, Math.PI * 2, false);
+  context.arc(pixelX, pixelY, radius, 0, Math.PI * 2, false);
   context.closePath();
   context.fill();
 }
 
 function clearScreen(context) {
-  const screenWidth = 800;
-  const screenHeight = 600;
-
-  context.clearRect(0, 0, screenWidth, screenHeight);
+  context.clearRect(0, 0, SCREEN_PIXEL_WIDTH, SCREEN_PIXEL_HEIGHT);
 }
 
-function useKeyboardShortcuts(setX, setY) {
+function collidedWithBorder(x, y) {
+  const isOutOfBounds =
+    x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT;
+
+  return isOutOfBounds;
+}
+
+function useKeyboardShortcuts(x, y, setX, setY) {
   const handleKeydown = ({ code }) => {
     switch (code) {
       case "ArrowUp":
-        setY((prev) => prev - SQUARE_SIZE);
+        setY((prev) => {
+          const current = prev - 1;
+          if (collidedWithBorder(x, current)) {
+            return prev;
+          }
+          return current;
+        });
         break;
       case "ArrowDown":
-        setY((prev) => prev + SQUARE_SIZE);
+        setY((prev) => {
+          const current = prev + 1;
+          if (collidedWithBorder(x, current)) {
+            return prev;
+          }
+          return current;
+        });
         break;
       case "ArrowLeft":
-        setX((prev) => prev - SQUARE_SIZE);
+        setX((prev) => {
+          const current = prev - 1;
+          if (collidedWithBorder(current, y)) {
+            return prev;
+          }
+          return current;
+        });
         break;
       case "ArrowRight":
-        setX((prev) => prev + SQUARE_SIZE);
+        setX((prev) => {
+          const current = prev + 1;
+          if (collidedWithBorder(current, y)) {
+            return prev;
+          }
+          return current;
+        });
         break;
       default:
         return;
@@ -59,11 +95,11 @@ function useMover(x, y, canvasRef) {
 }
 
 function Pacman() {
-  const [x, setX] = useState(50);
-  const [y, setY] = useState(100);
+  const [x, setX] = useState(INITIAL_X);
+  const [y, setY] = useState(INITIAL_Y);
   const canvasRef = useRef(null);
 
-  useKeyboardShortcuts(setX, setY);
+  useKeyboardShortcuts(x, y, setX, setY);
   useMover(x, y, canvasRef);
 
   return (
@@ -71,8 +107,8 @@ function Pacman() {
       <canvas
         ref={canvasRef}
         className="bg-orange-200"
-        width="800"
-        height="600"
+        width={SCREEN_PIXEL_WIDTH}
+        height={SCREEN_PIXEL_HEIGHT}
       ></canvas>
     </>
   );
