@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useLayoutEffect, useState, useRef } from "react";
 
 // 0 is a blank space
 // 1 is a wall
 // 2 is a pellet
-const grid = [
+const GRID = [
   [2, 2, 2, 2, 2, 2, 2, 1],
   [2, 1, 2, 1, 2, 2, 2, 1],
   [2, 2, 1, 2, 2, 2, 2, 1],
@@ -12,18 +12,41 @@ const grid = [
   [1, 2, 2, 2, 2, 2, 2, 1],
 ];
 
+const DIRECTIONS = {
+  up: {
+    x: 0,
+    y: -1,
+  },
+  down: {
+    x: 0,
+    y: 1,
+  },
+  left: {
+    x: -1,
+    y: 0,
+  },
+  right: {
+    x: 1,
+    y: 0,
+  },
+  stopped: {
+    x: 0,
+    y: 0,
+  },
+};
+
 const SQUARE_SIZE = 40;
 const INITIAL_X = 1;
 const INITIAL_Y = 2;
-const SCREEN_WIDTH = grid[0].length;
-const SCREEN_HEIGHT = grid.length;
+const SCREEN_WIDTH = GRID[0].length;
+const SCREEN_HEIGHT = GRID.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
 const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
 
 function levelComplete() {
   let hasPelletsLeft = false;
 
-  grid.forEach((row) => {
+  GRID.forEach((row) => {
     row.forEach((cell) => {
       if (cell === 2) {
         hasPelletsLeft = true;
@@ -38,10 +61,10 @@ function restartLevel(setX, setY) {
   setX(0);
   setY(0);
 
-  grid.forEach((row, rowIndex) => {
+  GRID.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       if (cell === 0) {
-        grid[rowIndex][columnIndex] = 2;
+        GRID[rowIndex][columnIndex] = 2;
       }
     });
   });
@@ -76,7 +99,7 @@ function drawWall(x, y, context) {
 function drawGrid(context) {
   context.fillStyle = "#000000";
 
-  grid.forEach((row, rowIndex) => {
+  GRID.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       if (cell === 1) {
         drawWall(columnIndex, rowIndex, context);
@@ -89,9 +112,18 @@ function drawGrid(context) {
   });
 }
 
-function processAnyPellets(x, y, setX, setY, score, setScore, level, setLevel) {
-  if (grid[y][x] === 2) {
-    grid[y][x] = 0;
+function processAnyPellets({
+  x,
+  y,
+  setX,
+  setY,
+  level,
+  setLevel,
+  score,
+  setScore,
+}) {
+  if (GRID[y][x] === 2) {
+    GRID[y][x] = 0;
     setScore(score + 1);
 
     if (levelComplete()) {
@@ -105,104 +137,116 @@ function clearScreen(context) {
   context.clearRect(0, 0, SCREEN_PIXEL_WIDTH, SCREEN_PIXEL_HEIGHT);
 }
 
-function collidedWithBorder(x, y) {
-  const isOutOfBounds =
-    x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT;
-
-  return isOutOfBounds;
+function nextCoordinate(coordinate, coordinateValue, direction = "stopped") {
+  return coordinateValue + DIRECTIONS[direction][coordinate];
 }
 
-function collidedWithWall(x, y) {
-  return grid[y][x] === 1;
-}
+function useKeyboardShortcuts() {
+  const [direction, setDirection] = useState("stopped");
 
-function useKeyboardShortcuts(x, y, setX, setY, canvasRef) {
   const handleKeydown = ({ code }) => {
     switch (code) {
       case "ArrowUp":
-        setY((prev) => {
-          const current = prev - 1;
-          if (collidedWithBorder(x, current) || collidedWithWall(x, current)) {
-            return prev;
-          }
-          return current;
-        });
+        setDirection("up");
         break;
       case "ArrowDown":
-        setY((prev) => {
-          const current = prev + 1;
-          if (collidedWithBorder(x, current) || collidedWithWall(x, current)) {
-            return prev;
-          }
-          return current;
-        });
+        setDirection("down");
         break;
       case "ArrowLeft":
-        setX((prev) => {
-          const current = prev - 1;
-          if (collidedWithBorder(current, y) || collidedWithWall(current, y)) {
-            return prev;
-          }
-          return current;
-        });
+        setDirection("left");
         break;
       case "ArrowRight":
-        setX((prev) => {
-          const current = prev + 1;
-          if (collidedWithBorder(current, y) || collidedWithWall(current, y)) {
-            return prev;
-          }
-          return current;
-        });
+        setDirection("right");
         break;
       default:
-        return;
+        setDirection("stopped");
     }
   };
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas.getContext("2d");
-
-    clearScreen(context);
+  useLayoutEffect(() => {
     document.addEventListener("keydown", handleKeydown);
-
     return () => {
       document.removeEventListener("keydown", handleKeydown);
     };
   });
+
+  return [direction, setDirection];
 }
 
-function useMover(
-  x,
-  y,
-  setX,
-  setY,
+function useMover({
+  direction,
+  setDirection,
   canvasRef,
-  score,
-  setScore,
   level,
   setLevel,
-) {
-  useEffect(() => {
+  score,
+  setScore,
+}) {
+  const [x, setX] = useState(INITIAL_X);
+  const [y, setY] = useState(INITIAL_Y);
+  const nextX = nextCoordinate("x", x, direction);
+  const nextY = nextCoordinate("y", y, direction);
+
+  if (
+    direction !== "stopped" &&
+    !pathBlockedInDirection(nextX, nextY, direction)
+  ) {
+    setX(nextX);
+    setY(nextY);
+    setDirection("stopped");
+  }
+
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
 
+    clearScreen(context);
     drawGrid(context);
     drawPacman(x, y, context);
-    processAnyPellets(x, y, setX, setY, score, setScore, level, setLevel);
-  }, [x, y, setX, setY, canvasRef, score, setScore, level, setLevel]);
+    processAnyPellets({
+      x,
+      y,
+      setX,
+      setY,
+      level,
+      setLevel,
+      score,
+      setScore,
+    });
+  }, [
+    x,
+    y,
+    canvasRef,
+    direction,
+    setDirection,
+    level,
+    setLevel,
+    score,
+    setScore,
+  ]);
+}
+
+function pathBlockedInDirection(x, y) {
+  const cellTypeInDirection = GRID?.[y]?.[x];
+
+  return cellTypeInDirection === undefined || cellTypeInDirection === 1;
 }
 
 function Pacman() {
+  const canvasRef = useRef(null);
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
-  const [x, setX] = useState(INITIAL_X);
-  const [y, setY] = useState(INITIAL_Y);
-  const canvasRef = useRef(null);
+  const [direction, setDirection] = useKeyboardShortcuts();
 
-  useKeyboardShortcuts(x, y, setX, setY, canvasRef);
-  useMover(x, y, setX, setY, canvasRef, score, setScore, level, setLevel);
+  useMover({
+    direction,
+    setDirection,
+    canvasRef,
+    level,
+    setLevel,
+    score,
+    setScore,
+  });
 
   return (
     <>
