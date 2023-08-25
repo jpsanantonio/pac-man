@@ -1,13 +1,5 @@
-import { useLayoutEffect, useState, useRef } from "react";
-
-const GRID = [
-  [2, 2, 2, 2, 2, 2, 2, 1],
-  [2, 1, 2, 1, 2, 2, 2, 1],
-  [2, 2, 1, 2, 2, 2, 2, 1],
-  [2, 2, 2, 2, 2, 2, 2, 1],
-  [2, 2, 2, 2, 2, 2, 2, 1],
-  [1, 2, 2, 2, 2, 2, 2, 1],
-];
+import { useImmerReducer } from "use-immer";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const DIRECTIONS = {
   up: {
@@ -33,17 +25,34 @@ const DIRECTIONS = {
 };
 
 const SQUARE_SIZE = 40;
-const INITIAL_GAME_DATA = { level: 1, score: 0 };
-const INITIAL_POSITION = { x: 1, y: 2 };
-const SCREEN_WIDTH = GRID[0].length;
-const SCREEN_HEIGHT = GRID.length;
+const INITIAL_GAME_DATA = {
+  position: {
+    x: 1,
+    y: 2,
+  },
+  progress: {
+    level: 1,
+    score: 0,
+  },
+  grid: [
+    [2, 2, 2, 2, 2, 2, 2, 1],
+    [2, 1, 2, 1, 2, 2, 2, 1],
+    [2, 0, 1, 2, 2, 2, 2, 1],
+    [2, 2, 2, 2, 2, 2, 2, 1],
+    [2, 2, 2, 2, 2, 2, 2, 1],
+    [1, 2, 2, 2, 2, 2, 2, 1],
+  ],
+};
+const SCREEN_WIDTH = INITIAL_GAME_DATA.grid[0].length;
+const SCREEN_HEIGHT = INITIAL_GAME_DATA.grid.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
 const SCREEN_PIXEL_HEIGHT = SCREEN_HEIGHT * SQUARE_SIZE;
+const FRAMES_PER_MOVEMENT = 30;
 
-function levelComplete() {
+function levelComplete(grid) {
   let hasPelletsLeft = false;
 
-  GRID.forEach((row) => {
+  grid.forEach((row) => {
     row.forEach((cell) => {
       if (cell === 2) {
         hasPelletsLeft = true;
@@ -54,13 +63,15 @@ function levelComplete() {
   return !hasPelletsLeft;
 }
 
-function restartLevel(setPosition) {
-  setPosition({ x: 0, y: 0 });
-
-  GRID.forEach((row, rowIndex) => {
+function restartLevel({ x, y }, grid) {
+  grid.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       if (cell === 0) {
-        GRID[rowIndex][columnIndex] = 2;
+        grid[rowIndex][columnIndex] = 2;
+      }
+
+      if (x === columnIndex && y === rowIndex) {
+        grid[rowIndex][columnIndex] = 0;
       }
     });
   });
@@ -95,10 +106,10 @@ function drawWall(x, y, context) {
   context.fillRect(x * SQUARE_SIZE, y * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
 }
 
-function drawGrid(context) {
+function drawGrid(grid, context) {
   context.fillStyle = "#000000";
 
-  GRID.forEach((row, rowIndex) => {
+  grid.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       if (cell === 1) {
         drawWall(columnIndex, rowIndex, context);
@@ -111,18 +122,20 @@ function drawGrid(context) {
   });
 }
 
-function processAnyPellets({ position, setPosition, gameData, setGameData }) {
+function processPellets({ position, progress, grid }) {
   const { x, y } = position;
 
-  if (GRID[y][x] === 2) {
-    GRID[y][x] = 0;
-    setGameData({ ...gameData, score: gameData.score + 1 });
+  if (grid[y][x] === 2) {
+    grid[y][x] = 0;
+    progress.score++;
 
-    if (levelComplete()) {
-      setGameData({ ...gameData, level: gameData.level + 1 });
-      restartLevel(setPosition);
+    if (levelComplete(grid)) {
+      progress.level++;
+      restartLevel(position, grid);
     }
   }
+
+  return { position, progress, grid };
 }
 
 function clearScreen(context) {
@@ -136,25 +149,12 @@ function nextCoordinate(position, direction = "stopped") {
   return { x, y };
 }
 
-function useKeyboardShortcuts() {
-  const [direction, setDirection] = useState("stopped");
-
+function useKeyboardShortcuts(setType) {
   const handleKeydown = ({ code }) => {
-    switch (code) {
-      case "ArrowUp":
-        setDirection("up");
-        break;
-      case "ArrowDown":
-        setDirection("down");
-        break;
-      case "ArrowLeft":
-        setDirection("left");
-        break;
-      case "ArrowRight":
-        setDirection("right");
-        break;
-      default:
-        setDirection("stopped");
+    const direction = code.replace(/^Arrow(.*)$/, "$1").toLowerCase();
+
+    if (["up", "down", "left", "right"].includes(direction)) {
+      setType(direction);
     }
   };
 
@@ -164,61 +164,72 @@ function useKeyboardShortcuts() {
       document.removeEventListener("keydown", handleKeydown);
     };
   });
-
-  return [direction, setDirection];
 }
 
-function useMover({
-  direction,
-  setDirection,
-  canvasRef,
-  gameData,
-  setGameData,
-}) {
-  const [position, setPosition] = useState(INITIAL_POSITION);
-  const nextPosition = nextCoordinate(position, direction);
+function pathBlockedInDirection({ x, y }, grid) {
+  const cellTypeInDirection = grid?.[y]?.[x];
 
-  if (
-    direction !== "stopped" &&
-    !pathBlockedInDirection(nextPosition, direction)
-  ) {
-    setPosition({ x: nextPosition.x, y: nextPosition.y });
-    setDirection("stopped");
+  return cellTypeInDirection === undefined || cellTypeInDirection === 1;
+}
+
+function gameDataReducer(gameData, action) {
+  const position = nextCoordinate(gameData.position, action.type);
+
+  switch (action.type) {
+    case "up":
+    case "down":
+      if (pathBlockedInDirection(position, gameData.grid)) {
+        position.y = gameData.position.y;
+      }
+
+      break;
+    case "left":
+    case "right":
+      if (pathBlockedInDirection(position, gameData.grid)) {
+        position.x = gameData.position.x;
+      }
+
+      break;
+    default:
+      throw Error(`Unsupported type: ${action.type}`);
   }
+  gameData.position = position;
+
+  const { progress, grid } = processPellets(gameData);
+
+  gameData.progress = progress;
+  gameData.grid = grid;
+}
+
+function Pacman() {
+  console.log("rendering");
+  const [type, setType] = useState("stopped");
+  const canvasRef = useRef(null);
+  const [gameData, dispatch] = useImmerReducer(
+    gameDataReducer,
+    INITIAL_GAME_DATA,
+  );
+  const { position, progress, grid } = gameData;
+
+  useKeyboardShortcuts(setType);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
 
     clearScreen(context);
-    drawGrid(context);
+    drawGrid(grid, context);
     drawPacman(position, context);
-    processAnyPellets({
-      position,
-      setPosition,
-      gameData,
-      setGameData,
-    });
-  }, [position, canvasRef, direction, setDirection, gameData, setGameData]);
-}
+  }, [grid, position]);
 
-function pathBlockedInDirection({ x, y }) {
-  const cellTypeInDirection = GRID?.[y]?.[x];
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (type !== "stopped") {
+        dispatch({ type });
+      }
+    }, 1000 / 6);
 
-  return cellTypeInDirection === undefined || cellTypeInDirection === 1;
-}
-
-function Pacman() {
-  const canvasRef = useRef(null);
-  const [gameData, setGameData] = useState(INITIAL_GAME_DATA);
-  const [direction, setDirection] = useKeyboardShortcuts();
-
-  useMover({
-    direction,
-    setDirection,
-    canvasRef,
-    gameData,
-    setGameData,
+    return () => clearTimeout(timeoutId);
   });
 
   return (
@@ -230,7 +241,7 @@ function Pacman() {
         height={SCREEN_PIXEL_HEIGHT}
       ></canvas>
       <br />
-      Score: {gameData.score} &nbsp; &nbsp; &nbsp; Level: {gameData.level}
+      Score: {progress.score} &nbsp; &nbsp; &nbsp; Level: {progress.level}
     </>
   );
 }
