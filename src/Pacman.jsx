@@ -1,8 +1,5 @@
 import { useLayoutEffect, useState, useRef } from "react";
 
-// 0 is a blank space
-// 1 is a wall
-// 2 is a pellet
 const GRID = [
   [2, 2, 2, 2, 2, 2, 2, 1],
   [2, 1, 2, 1, 2, 2, 2, 1],
