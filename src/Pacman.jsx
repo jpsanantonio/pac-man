@@ -36,8 +36,8 @@ const DIRECTIONS = {
 };
 
 const SQUARE_SIZE = 40;
-const INITIAL_X = 1;
-const INITIAL_Y = 2;
+const INITIAL_GAME_DATA = { level: 1, score: 0 };
+const INITIAL_POSITION = { x: 1, y: 2 };
 const SCREEN_WIDTH = GRID[0].length;
 const SCREEN_HEIGHT = GRID.length;
 const SCREEN_PIXEL_WIDTH = SCREEN_WIDTH * SQUARE_SIZE;
@@ -57,9 +57,8 @@ function levelComplete() {
   return !hasPelletsLeft;
 }
 
-function restartLevel(setX, setY) {
-  setX(0);
-  setY(0);
+function restartLevel(setPosition) {
+  setPosition({ x: 0, y: 0 });
 
   GRID.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
@@ -70,7 +69,8 @@ function restartLevel(setX, setY) {
   });
 }
 
-function drawCircle(x, y, context, radiusDivisor) {
+function drawCircle(position, context, radiusDivisor) {
+  const { x, y } = position;
   const radius = SQUARE_SIZE / radiusDivisor;
   const pixelX = (x + 1 / 2) * SQUARE_SIZE;
   const pixelY = (y + 1 / 2) * SQUARE_SIZE;
@@ -82,14 +82,16 @@ function drawCircle(x, y, context, radiusDivisor) {
   context.fill();
 }
 
-function drawPacman(x, y, context) {
+function drawPacman(position, context) {
   const radiusDivisor = 2;
-  drawCircle(x, y, context, radiusDivisor);
+  drawCircle(position, context, radiusDivisor);
 }
 
 function drawPellet(x, y, context) {
   const radiusDivisor = 6;
-  drawCircle(x, y, context, radiusDivisor);
+  const position = { x, y };
+
+  drawCircle(position, context, radiusDivisor);
 }
 
 function drawWall(x, y, context) {
@@ -112,23 +114,16 @@ function drawGrid(context) {
   });
 }
 
-function processAnyPellets({
-  x,
-  y,
-  setX,
-  setY,
-  level,
-  setLevel,
-  score,
-  setScore,
-}) {
+function processAnyPellets({ position, setPosition, gameData, setGameData }) {
+  const { x, y } = position;
+
   if (GRID[y][x] === 2) {
     GRID[y][x] = 0;
-    setScore(score + 1);
+    setGameData({ ...gameData, score: gameData.score + 1 });
 
     if (levelComplete()) {
-      setLevel(level + 1);
-      restartLevel(setX, setY);
+      setGameData({ ...gameData, level: gameData.level + 1 });
+      restartLevel(setPosition);
     }
   }
 }
@@ -137,8 +132,11 @@ function clearScreen(context) {
   context.clearRect(0, 0, SCREEN_PIXEL_WIDTH, SCREEN_PIXEL_HEIGHT);
 }
 
-function nextCoordinate(coordinate, coordinateValue, direction = "stopped") {
-  return coordinateValue + DIRECTIONS[direction][coordinate];
+function nextCoordinate(position, direction = "stopped") {
+  const x = position.x + DIRECTIONS[direction]["x"];
+  const y = position.y + DIRECTIONS[direction]["y"];
+
+  return { x, y };
 }
 
 function useKeyboardShortcuts() {
@@ -177,22 +175,17 @@ function useMover({
   direction,
   setDirection,
   canvasRef,
-  level,
-  setLevel,
-  score,
-  setScore,
+  gameData,
+  setGameData,
 }) {
-  const [x, setX] = useState(INITIAL_X);
-  const [y, setY] = useState(INITIAL_Y);
-  const nextX = nextCoordinate("x", x, direction);
-  const nextY = nextCoordinate("y", y, direction);
+  const [position, setPosition] = useState(INITIAL_POSITION);
+  const nextPosition = nextCoordinate(position, direction);
 
   if (
     direction !== "stopped" &&
-    !pathBlockedInDirection(nextX, nextY, direction)
+    !pathBlockedInDirection(nextPosition, direction)
   ) {
-    setX(nextX);
-    setY(nextY);
+    setPosition({ x: nextPosition.x, y: nextPosition.y });
     setDirection("stopped");
   }
 
@@ -202,31 +195,17 @@ function useMover({
 
     clearScreen(context);
     drawGrid(context);
-    drawPacman(x, y, context);
+    drawPacman(position, context);
     processAnyPellets({
-      x,
-      y,
-      setX,
-      setY,
-      level,
-      setLevel,
-      score,
-      setScore,
+      position,
+      setPosition,
+      gameData,
+      setGameData,
     });
-  }, [
-    x,
-    y,
-    canvasRef,
-    direction,
-    setDirection,
-    level,
-    setLevel,
-    score,
-    setScore,
-  ]);
+  }, [position, canvasRef, direction, setDirection, gameData, setGameData]);
 }
 
-function pathBlockedInDirection(x, y) {
+function pathBlockedInDirection({ x, y }) {
   const cellTypeInDirection = GRID?.[y]?.[x];
 
   return cellTypeInDirection === undefined || cellTypeInDirection === 1;
@@ -234,18 +213,15 @@ function pathBlockedInDirection(x, y) {
 
 function Pacman() {
   const canvasRef = useRef(null);
-  const [level, setLevel] = useState(1);
-  const [score, setScore] = useState(0);
+  const [gameData, setGameData] = useState(INITIAL_GAME_DATA);
   const [direction, setDirection] = useKeyboardShortcuts();
 
   useMover({
     direction,
     setDirection,
     canvasRef,
-    level,
-    setLevel,
-    score,
-    setScore,
+    gameData,
+    setGameData,
   });
 
   return (
@@ -257,7 +233,7 @@ function Pacman() {
         height={SCREEN_PIXEL_HEIGHT}
       ></canvas>
       <br />
-      Score: {score} &nbsp; &nbsp; &nbsp; Level: {level}
+      Score: {gameData.score} &nbsp; &nbsp; &nbsp; Level: {gameData.level}
     </>
   );
 }
